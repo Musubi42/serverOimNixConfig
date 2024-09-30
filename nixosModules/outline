@@ -1,0 +1,74 @@
+{ config, pkgs, lib, ... }: {
+
+  # services.nginx = {
+  #   enable = true;
+  #   recommendedProxySettings = true;
+  #   recommendedTlsSettings = true;
+  #   virtualHosts = {
+  #     "outline.example.tld" = {
+  #       onlySSL = true;
+  #       useACMEHost = "example.tld"; # assuming security.acme.certs."example.tld" with `extraDomainNames = [ "outline.example.tld" ]`
+  #       locations."/" = {
+  #         proxyPass = "http://localhost:${toString config.services.outline.port}";
+  #         proxyWebsockets = true;
+  #         extraConfig = ''
+  #               proxy_set_header X-Scheme $scheme;
+  #         '';
+  #       };
+  #     };
+  #     "dex.example.tld" = {
+  #       onlySSL = true;
+  #       useACMEHost = "example.tld";
+  #       locations."/" = {
+  #         proxyPass = "http://${config.services.dex.settings.web.http}";
+  #         proxyWebsockets = true;
+  #       };
+  #     };
+  #   };
+  # };
+
+
+  services.outline = {
+    enable = true;
+    publicUrl = "https://outline.musubi.dev";
+    port = 3003; # using 3003 instead of default 3000 just in case another service is already using 3000
+    forceHttps = false;
+    storage.storageType = "local";
+    oidcAuthentication = {
+      authUrl = "https://dex.example.tld/auth";
+      tokenUrl = "https://dex.example.tld/token";
+      userinfoUrl = "https://dex.example.tld/userinfo";
+      clientId = "outline";
+      clientSecretFile = (builtins.elemAt config.services.dex.settings.staticClients 0).secretFile;
+      scopes = [ "openid" "email" "profile" ];
+      usernameClaim = "preferred_username";
+      displayName = "Dex";
+    };
+  };
+
+  services.dex = {
+    enable = true;
+    settings = {
+      issuer = "https://dex.example.tld";
+      storage.type = "sqlite3";
+      web.http = "127.0.0.1:5556";
+      staticClients = [
+        {
+          id = "outline";
+          name = "Outline Client";
+          redirectURIs = [ "https://outline.example.tld/auth/oidc.callback" ];
+          secretFile = "${pkgs.writeText "outline-oidc-secret" "test123"}";
+        }
+      ];
+      staticPasswords = [
+       {
+         email = "user.email@example.com";
+         # bcrypt hash of the string "password": $(echo password | htpasswd -BinC 10 admin | cut -d: -f2)
+         hash = "10$TDh68T5XUK10$TDh68T5XUK10$TDh68T5XUK";
+         username = "test";
+         # easily generated with `$ uuidgen`
+         userID = "6D196B03-8A28-4D6E-B849-9298168CBA34";
+       }
+     ];
+   };	
+ };
